@@ -2261,7 +2261,8 @@ export class Query<T = firestore.DocumentData> implements firestore.Query<T> {
 
     let lastReceivedDocument: QueryDocumentSnapshot<T> | null = null;
 
-    const stream = new Transform({
+    let stream: Transform;
+    stream = new Transform({
       objectMode: true,
       transform: (proto, enc, callback) => {
         const readTime = Timestamp.fromProto(proto.readTime);
@@ -2281,6 +2282,9 @@ export class Query<T = firestore.DocumentData> implements firestore.Query<T> {
           finalDoc.updateTime = document.updateTime;
           lastReceivedDocument = finalDoc.build() as QueryDocumentSnapshot<T>;
           callback(undefined, {document: lastReceivedDocument, readTime});
+          if (proto.done) {
+            stream.emit("end");
+          }
         } else {
           callback(undefined, {readTime});
         }
