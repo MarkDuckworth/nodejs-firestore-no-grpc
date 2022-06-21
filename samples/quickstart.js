@@ -18,7 +18,8 @@
 const {Firestore} = require('@google-cloud/firestore');
 
 // Create a new client
-const firestore = new Firestore();
+const settings = {preferRest: true};
+const firestore = new Firestore(settings);
 
 async function quickstart() {
   // Obtain a document reference.

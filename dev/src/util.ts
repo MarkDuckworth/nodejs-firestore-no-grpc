@@ -17,7 +17,21 @@
 import {DocumentData} from '@google-cloud/firestore';
 
 import {randomBytes} from 'crypto';
-import {CallSettings, ClientConfig, GoogleError} from 'google-gax';
+// import {CallSettings, ClientConfig, GoogleError} from 'google-gax';
+
+import {
+  ClientConfig,
+  CallSettings,
+  constructSettings,
+  createDefaultBackoffSettings
+} from 'google-gax/build/src/gax';
+
+import {Status} from 'google-gax/build/src/status';
+
+import {
+  GoogleError,
+} from 'google-gax/build/src/googleError';
+
 import {BackoffSettings} from 'google-gax/build/src/gax';
 import * as gapicConfig from './v1/firestore_client_config.json';
 
@@ -157,11 +171,11 @@ let serviceConfig: Record<string, CallSettings> | undefined;
 /** Lazy-loads the service config when first accessed. */
 function getServiceConfig(methodName: string): CallSettings | undefined {
   if (!serviceConfig) {
-    serviceConfig = require('google-gax').constructSettings(
+    serviceConfig = constructSettings(
       'google.firestore.v1.Firestore',
       gapicConfig as ClientConfig,
       {},
-      require('google-gax').Status
+      Status
     ) as {[k: string]: CallSettings};
   }
   return serviceConfig[methodName];
@@ -185,7 +199,7 @@ export function getRetryCodes(methodName: string): number[] {
 export function getRetryParams(methodName: string): BackoffSettings {
   return (
     getServiceConfig(methodName)?.retry?.backoffSettings ??
-    require('google-gax').createDefaultBackoffSettings()
+    createDefaultBackoffSettings()
   );
 }
 

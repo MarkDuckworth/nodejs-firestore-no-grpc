@@ -17,16 +17,44 @@
 // ** All changes to this file may be overwritten. **
 
 /* global window */
-import * as gax from 'google-gax';
+// import * as gax from 'google-gax';
 import {
   Callback,
-  CallOptions,
   Descriptors,
   ClientOptions,
   PaginationCallback,
+} from 'google-gax/build/src/clientInterface';
+
+import {
+  CallOptions,
+  ClientConfig,
+  CallSettings,
+} from 'google-gax/build/src/gax';
+
+import {
   GaxCall,
+  CancellableStream,
+} from 'google-gax/build/src/apitypes';
+
+import {
   GoogleError,
-} from 'google-gax';
+} from 'google-gax/build/src/googleError';
+
+import {
+  GoogleAuth,
+} from 'google-auth-library';
+
+import {warn} from 'google-gax/build/src/warnings';
+
+import {StreamType} from 'google-gax/build/src/streamingCalls/streaming';
+
+import * as gaxfallback from 'google-gax/build/src/fallback';
+
+import * as routingHeader from 'google-gax/build/src/routingHeader';
+
+import {
+  GrpcClient,
+} from 'google-gax/build/src/grpc';
 
 import {Transform} from 'stream';
 import {RequestType} from 'google-gax/build/src/apitypes';
@@ -58,11 +86,13 @@ export class FirestoreClient {
   private _terminated = false;
   private _opts: ClientOptions;
   private _providedCustomServicePath: boolean;
-  private _gaxModule: typeof gax | typeof gax.fallback;
-  private _gaxGrpc: gax.GrpcClient | gax.fallback.GrpcClient;
+  // private _gaxModule: typeof gax | typeof gaxfallback;
+  private _gaxModule: typeof gaxfallback;
+  // private _gaxGrpc: GrpcClient | gaxfallback.GrpcClient;
+  private _gaxGrpc: gaxfallback.GrpcClient;
   private _protos: {};
-  private _defaults: {[method: string]: gax.CallSettings};
-  auth: gax.GoogleAuth;
+  private _defaults: {[method: string]: CallSettings};
+  auth: GoogleAuth;
   descriptors: Descriptors = {
     page: {},
     stream: {},
@@ -99,7 +129,7 @@ export class FirestoreClient {
    *     your project ID will be detected automatically.
    * @param {string} [options.apiEndpoint] - The domain name of the
    *     API remote host.
-   * @param {gax.ClientConfig} [options.clientConfig] - Client configuration override.
+   * @param {ClientConfig} [options.clientConfig] - Client configuration override.
    *     Follows the structure of {@link gapicConfig}.
    * @param {boolean} [options.fallback] - Use HTTP fallback mode.
    *     In fallback mode, a special browser-compatible transport implementation is used
@@ -127,8 +157,12 @@ export class FirestoreClient {
       opts['scopes'] = staticMembers.scopes;
     }
 
-    // Choose either gRPC or proto-over-HTTP implementation of google-gax.
-    this._gaxModule = opts.fallback ? gax.fallback : gax;
+    // Choose either gRPC or proto-over-HTTP implementation of google-gax
+    // this._gaxModule = opts.fallback ? gaxfallback : gax;
+    if (!opts.fallback) {
+      throw new Error("GRPC not supported in this build");
+    }
+    this._gaxModule = gaxfallback;
 
     // Create a `gaxGrpc` object, with any grpc-specific options sent to the client.
     this._gaxGrpc = new this._gaxModule.GrpcClient(opts);
@@ -137,7 +171,8 @@ export class FirestoreClient {
     this._opts = opts;
 
     // Save the auth object to the client, for use by other methods.
-    this.auth = this._gaxGrpc.auth as gax.GoogleAuth;
+    // TODO fix this workaround...
+    this.auth = this._gaxGrpc.auth as any as GoogleAuth;
 
     // Set useJWTAccessWithScope on the auth object.
     this.auth.useJWTAccessWithScope = true;
@@ -193,19 +228,19 @@ export class FirestoreClient {
     // Provide descriptors for these.
     this.descriptors.stream = {
       batchGetDocuments: new this._gaxModule.StreamDescriptor(
-        gax.StreamType.SERVER_STREAMING,
+        StreamType.SERVER_STREAMING,
         opts.fallback === 'rest'
       ),
       runQuery: new this._gaxModule.StreamDescriptor(
-        gax.StreamType.SERVER_STREAMING,
+        StreamType.SERVER_STREAMING,
         opts.fallback === 'rest'
       ),
       write: new this._gaxModule.StreamDescriptor(
-        gax.StreamType.BIDI_STREAMING,
+        StreamType.BIDI_STREAMING,
         opts.fallback === 'rest'
       ),
       listen: new this._gaxModule.StreamDescriptor(
-        gax.StreamType.BIDI_STREAMING,
+        StreamType.BIDI_STREAMING,
         opts.fallback === 'rest'
       ),
     };
@@ -213,7 +248,7 @@ export class FirestoreClient {
     // Put together the default options sent with requests.
     this._defaults = this._gaxGrpc.constructSettings(
       'google.firestore.v1.Firestore',
-      gapicConfig as gax.ClientConfig,
+      gapicConfig as ClientConfig,
       opts.clientConfig || {},
       {'x-goog-api-client': clientHeader.join(' ')}
     );
@@ -224,7 +259,7 @@ export class FirestoreClient {
     this.innerApiCalls = {};
 
     // Add a warn function to the client constructor so it can be easily tested.
-    this.warn = gax.warn;
+    this.warn = warn;
   }
 
   /**
@@ -461,7 +496,7 @@ export class FirestoreClient {
     options.otherArgs = options.otherArgs || {};
     options.otherArgs.headers = options.otherArgs.headers || {};
     options.otherArgs.headers['x-goog-request-params'] =
-      gax.routingHeader.fromParams({
+      routingHeader.fromParams({
         name: request.name || '',
       });
     this.initialize();
@@ -561,7 +596,7 @@ export class FirestoreClient {
     options.otherArgs = options.otherArgs || {};
     options.otherArgs.headers = options.otherArgs.headers || {};
     options.otherArgs.headers['x-goog-request-params'] =
-      gax.routingHeader.fromParams({
+      routingHeader.fromParams({
         'document.name': request.document!.name || '',
       });
     this.initialize();
@@ -648,7 +683,7 @@ export class FirestoreClient {
     options.otherArgs = options.otherArgs || {};
     options.otherArgs.headers = options.otherArgs.headers || {};
     options.otherArgs.headers['x-goog-request-params'] =
-      gax.routingHeader.fromParams({
+      routingHeader.fromParams({
         name: request.name || '',
       });
     this.initialize();
@@ -737,7 +772,7 @@ export class FirestoreClient {
     options.otherArgs = options.otherArgs || {};
     options.otherArgs.headers = options.otherArgs.headers || {};
     options.otherArgs.headers['x-goog-request-params'] =
-      gax.routingHeader.fromParams({
+      routingHeader.fromParams({
         database: request.database || '',
       });
     this.initialize();
@@ -827,7 +862,7 @@ export class FirestoreClient {
     options.otherArgs = options.otherArgs || {};
     options.otherArgs.headers = options.otherArgs.headers || {};
     options.otherArgs.headers['x-goog-request-params'] =
-      gax.routingHeader.fromParams({
+      routingHeader.fromParams({
         database: request.database || '',
       });
     this.initialize();
@@ -913,7 +948,7 @@ export class FirestoreClient {
     options.otherArgs = options.otherArgs || {};
     options.otherArgs.headers = options.otherArgs.headers || {};
     options.otherArgs.headers['x-goog-request-params'] =
-      gax.routingHeader.fromParams({
+      routingHeader.fromParams({
         database: request.database || '',
       });
     this.initialize();
@@ -1013,7 +1048,7 @@ export class FirestoreClient {
     options.otherArgs = options.otherArgs || {};
     options.otherArgs.headers = options.otherArgs.headers || {};
     options.otherArgs.headers['x-goog-request-params'] =
-      gax.routingHeader.fromParams({
+      routingHeader.fromParams({
         database: request.database || '',
       });
     this.initialize();
@@ -1111,7 +1146,7 @@ export class FirestoreClient {
     options.otherArgs = options.otherArgs || {};
     options.otherArgs.headers = options.otherArgs.headers || {};
     options.otherArgs.headers['x-goog-request-params'] =
-      gax.routingHeader.fromParams({
+      routingHeader.fromParams({
         parent: request.parent || '',
         collection_id: request.collectionId || '',
       });
@@ -1163,13 +1198,13 @@ export class FirestoreClient {
   batchGetDocuments(
     request?: protos.google.firestore.v1.IBatchGetDocumentsRequest,
     options?: CallOptions
-  ): gax.CancellableStream {
+  ): CancellableStream {
     request = request || {};
     options = options || {};
     options.otherArgs = options.otherArgs || {};
     options.otherArgs.headers = options.otherArgs.headers || {};
     options.otherArgs.headers['x-goog-request-params'] =
-      gax.routingHeader.fromParams({
+      routingHeader.fromParams({
         database: request.database || '',
       });
     this.initialize();
@@ -1215,13 +1250,13 @@ export class FirestoreClient {
   runQuery(
     request?: protos.google.firestore.v1.IRunQueryRequest,
     options?: CallOptions
-  ): gax.CancellableStream {
+  ): CancellableStream {
     request = request || {};
     options = options || {};
     options.otherArgs = options.otherArgs || {};
     options.otherArgs.headers = options.otherArgs.headers || {};
     options.otherArgs.headers['x-goog-request-params'] =
-      gax.routingHeader.fromParams({
+      routingHeader.fromParams({
         parent: request.parent || '',
       });
     this.initialize();
@@ -1243,7 +1278,7 @@ export class FirestoreClient {
    * @example <caption>include:samples/generated/v1/firestore.write.js</caption>
    * region_tag:firestore_v1_generated_Firestore_Write_async
    */
-  write(options?: CallOptions): gax.CancellableStream {
+  write(options?: CallOptions): CancellableStream {
     this.initialize();
     return this.innerApiCalls.write(null, options);
   }
@@ -1263,7 +1298,7 @@ export class FirestoreClient {
    * @example <caption>include:samples/generated/v1/firestore.listen.js</caption>
    * region_tag:firestore_v1_generated_Firestore_Listen_async
    */
-  listen(options?: CallOptions): gax.CancellableStream {
+  listen(options?: CallOptions): CancellableStream {
     this.initialize();
     return this.innerApiCalls.listen(null, options);
   }
@@ -1380,7 +1415,7 @@ export class FirestoreClient {
     options.otherArgs = options.otherArgs || {};
     options.otherArgs.headers = options.otherArgs.headers || {};
     options.otherArgs.headers['x-goog-request-params'] =
-      gax.routingHeader.fromParams({
+      routingHeader.fromParams({
         parent: request.parent || '',
         collection_id: request.collectionId || '',
       });
@@ -1447,7 +1482,7 @@ export class FirestoreClient {
     options.otherArgs = options.otherArgs || {};
     options.otherArgs.headers = options.otherArgs.headers || {};
     options.otherArgs.headers['x-goog-request-params'] =
-      gax.routingHeader.fromParams({
+      routingHeader.fromParams({
         parent: request.parent || '',
         collection_id: request.collectionId || '',
       });
@@ -1455,7 +1490,7 @@ export class FirestoreClient {
     const callSettings = defaultCallSettings.merge(options);
     this.initialize();
     return this.descriptors.page.listDocuments.createStream(
-      this.innerApiCalls.listDocuments as gax.GaxCall,
+      this.innerApiCalls.listDocuments as GaxCall,
       request,
       callSettings
     );
@@ -1523,7 +1558,7 @@ export class FirestoreClient {
     options.otherArgs = options.otherArgs || {};
     options.otherArgs.headers = options.otherArgs.headers || {};
     options.otherArgs.headers['x-goog-request-params'] =
-      gax.routingHeader.fromParams({
+      routingHeader.fromParams({
         parent: request.parent || '',
         collection_id: request.collectionId || '',
       });
@@ -1657,7 +1692,7 @@ export class FirestoreClient {
     options.otherArgs = options.otherArgs || {};
     options.otherArgs.headers = options.otherArgs.headers || {};
     options.otherArgs.headers['x-goog-request-params'] =
-      gax.routingHeader.fromParams({
+      routingHeader.fromParams({
         parent: request.parent || '',
       });
     this.initialize();
@@ -1730,14 +1765,14 @@ export class FirestoreClient {
     options.otherArgs = options.otherArgs || {};
     options.otherArgs.headers = options.otherArgs.headers || {};
     options.otherArgs.headers['x-goog-request-params'] =
-      gax.routingHeader.fromParams({
+      routingHeader.fromParams({
         parent: request.parent || '',
       });
     const defaultCallSettings = this._defaults['partitionQuery'];
     const callSettings = defaultCallSettings.merge(options);
     this.initialize();
     return this.descriptors.page.partitionQuery.createStream(
-      this.innerApiCalls.partitionQuery as gax.GaxCall,
+      this.innerApiCalls.partitionQuery as GaxCall,
       request,
       callSettings
     );
@@ -1812,7 +1847,7 @@ export class FirestoreClient {
     options.otherArgs = options.otherArgs || {};
     options.otherArgs.headers = options.otherArgs.headers || {};
     options.otherArgs.headers['x-goog-request-params'] =
-      gax.routingHeader.fromParams({
+      routingHeader.fromParams({
         parent: request.parent || '',
       });
     const defaultCallSettings = this._defaults['partitionQuery'];
@@ -1914,7 +1949,7 @@ export class FirestoreClient {
     options.otherArgs = options.otherArgs || {};
     options.otherArgs.headers = options.otherArgs.headers || {};
     options.otherArgs.headers['x-goog-request-params'] =
-      gax.routingHeader.fromParams({
+      routingHeader.fromParams({
         parent: request.parent || '',
       });
     this.initialize();
@@ -1956,14 +1991,14 @@ export class FirestoreClient {
     options.otherArgs = options.otherArgs || {};
     options.otherArgs.headers = options.otherArgs.headers || {};
     options.otherArgs.headers['x-goog-request-params'] =
-      gax.routingHeader.fromParams({
+      routingHeader.fromParams({
         parent: request.parent || '',
       });
     const defaultCallSettings = this._defaults['listCollectionIds'];
     const callSettings = defaultCallSettings.merge(options);
     this.initialize();
     return this.descriptors.page.listCollectionIds.createStream(
-      this.innerApiCalls.listCollectionIds as gax.GaxCall,
+      this.innerApiCalls.listCollectionIds as GaxCall,
       request,
       callSettings
     );
@@ -2007,7 +2042,7 @@ export class FirestoreClient {
     options.otherArgs = options.otherArgs || {};
     options.otherArgs.headers = options.otherArgs.headers || {};
     options.otherArgs.headers['x-goog-request-params'] =
-      gax.routingHeader.fromParams({
+      routingHeader.fromParams({
         parent: request.parent || '',
       });
     const defaultCallSettings = this._defaults['listCollectionIds'];

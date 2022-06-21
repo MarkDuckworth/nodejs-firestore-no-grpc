@@ -13,10 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 import * as firestore from '@google-cloud/firestore';
 
-import {CallOptions} from 'google-gax';
+// import {
+//     CallOptions,
+//     RetryOptions
+//   } from 'google-gax';
+
+import type {
+  CallOptions,
+  RetryOptions
+} from 'google-gax/build/src/gax';
+
+import {Status} from 'google-gax/build/src/status';
+
 import {Duplex, PassThrough, Transform} from 'stream';
 
 import {URL} from 'url';
@@ -1424,7 +1434,7 @@ export class Firestore implements firestore.Firestore {
 
     if (retryCodes) {
       const retryParams = getRetryParams(methodName);
-      callOptions.retry = new (require('google-gax').RetryOptions)(
+      callOptions.retry = new (RetryOptions)(
         retryCodes,
         retryParams
       );
@@ -1831,5 +1841,5 @@ Object.defineProperty(module.exports, 'v1', {
 Object.defineProperty(module.exports, 'GrpcStatus', {
   // The gax module is very large. To avoid pulling it in from static
   // scope, we lazy-load the module.
-  get: () => require('google-gax').Status,
+  get: () => Status,
 });

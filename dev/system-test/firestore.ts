@@ -977,7 +977,7 @@ describe('DocumentReference class', () => {
     return promise;
   });
 
-  describe('watch', () => {
+  describe.skip('watch', () => {
     const currentDeferred = new DeferredPromise<DocumentSnapshot>();
 
     function resetPromise() {
@@ -1864,7 +1864,7 @@ describe('Query class', () => {
     expect(snapshot.size).to.equal(100);
   });
 
-  describe('watch', () => {
+  describe.skip('watch', () => {
     interface ExpectedChange {
       type: string;
       doc: DocumentSnapshot;
@@ -2844,7 +2844,7 @@ describe('BulkWriter class', () => {
   });
 });
 
-describe('Client initialization', () => {
+describe.skip('Client initialization', () => {
   const ops: Array<[string, (coll: CollectionReference) => Promise<unknown>]> =
     [
       ['CollectionReference.get()', randomColl => randomColl.get()],
